@@ -70,7 +70,7 @@ Curated by: Chie Uchida
 ## License
 
 This code is open for reuse and modification.
-Attribution is appreciated. CC BY-NC 4.0
+Attribution is appreciated. MIT License
 
 ---
 
