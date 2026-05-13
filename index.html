@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>GardensofBecoming2025</title>
+    <!-- favicon.ico 404エラー対策 -->
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+
+<body>
+    <!-- FPSログ -->
+    <div id="perf-stats-section"
+        style="position: fixed; bottom: 0.1rem; right: 1rem; display: flex; flex-direction: column; align-items: flex-end; z-index: 100;">
+        <div id="perf-stats"
+            style="font-family:monospace; font-size:1rem; display:inline-block; min-width:10rem; text-align:right;">
+            FPS: <span id="perf-fps">--</span><br>
+        </div>
+    </div>
+
+    <!-- Webカメラ -->
+    <section class="card lock-target">
+        <h2>映像補正</h2>
+        <div class="hint">クリックすることでその地点の色を取得</div>
+
+        <div class="row">
+            <canvas id="mix" style="border-radius: 0.2rem;" width="1280" height="720"></canvas>
+        </div>
+
+        <div id="colorControls">
+            <div id="colorList" style="display:flex; gap:0.2rem; flex-wrap:wrap;"></div>
+        </div>
+
+        <span id="pickedCoord" style="margin-left:0px;"></span>
+
+        <!-- デバッグ表示 ON/OFF トグル -->
+        <label style="display:inline-flex; align-items:center; gap:0.3rem;">
+            <input type="checkbox" id="debugToggle">
+            各WebCamの生映像を表示（デバッグ用）
+        </label>
+
+        <!-- ※最初は中身なし。JSから必要なときだけ videoA/B を差し込む -->
+        <div id="debugVideos" style="display:flex; flex-direction:row; align-items:stretch; gap:1rem;">
+        </div>
+
+        <div class="row">
+            <label>解像度:
+                <select id="res">
+                    <option value="480x270">480×270</option>
+                    <option value="640x360">640×360</option>
+                    <option value="960x540" selected>960×540</option>
+                    <option value="1280x720">1280×720</option>
+                    <option value="1920x1080">1920×1080</option>
+                </select>
+            </label>
+            <button id="perm">権限</button>
+            <button id="refresh">再取得</button>
+        </div>
+    </section>
+
+    <section class="card lock-target">
+        <h2>ドット映像</h2>
+        <div class="hint">検出した色を単純なドットとして映像に出力</div>
+        <div style="display: flex; flex-direction: column; align-items: stretch; gap: 1rem;">
+            <canvas id="result1"
+                style="display: block; min-width: 100%; height: 100%; flex: 1 1 0; border-radius: 0.2rem;"></canvas>
+            <div style=" min-width: 220px;">
+                <div style="display: flex; flex-wrap: wrap; margin-bottom: 0.5rem; gap: 0.5rem 0; ">
+                    <label style="min-width: 140px;">
+                        <input type="checkbox" id="auto-r1" checked>自動保存
+                    </label>
+                    <label style="min-width: 140px;"><input type="checkbox"
+                            id="showTimeAndCoordsChkResult1">時間・座標</label>
+                </div>
+                <div style="display: flex; align-items: start; margin-bottom: 0.5rem;">
+                    <label>最大座標数: <strong id="maxCoordsLabel"></strong></label>
+                    <input id="maxCoords" type="range" value="500" min="100" max="1000" step="10">
+                </div>
+                <div style="display: flex; align-items: start; margin-bottom: 0.5rem;">
+                    <label>グリッド: <strong id="pxSizeLabel"></strong> px</label>
+                    <input id="pxSize" type="range" min="1" max="30" step="1" value="10" />
+                </div>
+                <div style="display: flex; align-items: start; margin-bottom: 0.5rem;">
+                    <label>近似閾値(色): <strong id="tolerancePercentLabel"></strong>%</label>
+                    <input id="tolerancePercent" type="range" min="1" max="30" step="1" value="3" />
+                </div>
+                <div style="display: flex; align-items: start; margin-bottom: 0.5rem;">
+                    <label>インターバル: <strong id="intervalSecLabel"></strong> 秒</label>
+                    <input id="intervalSec" type="range" min="1" max="180" step="1" value="10" />
+                </div>
+                <div style="display: flex; align-items: start; margin-bottom: 0.5rem;">
+                    <label>演出（所要時間）: <strong id="transitionMsLabel"></strong></label>
+                    <input id="transitionMs" type="range" min="1" max="10" step="1" value="5" />
+                </div>
+                <div style="display: flex; flex-direction: row; flex-wrap: wrap;">
+                    <button id="forceUpdate">更新</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card lock-target">
+        <h2>庭生成気象情報</h2>
+        <div class="hint">任意のグリッドを指定し、密度を計算した後、ベクトル場を描画</div>
+        <!-- ─── 3枚目: 密度ヒートマップ用キャンバス＋コントロール下並び ─── -->
+        <div style="display: flex; flex-direction: column; align-items: stretch; gap: 1rem;">
+            <canvas id="result2" style="display: block; min-width: 100%; height: 100%; border-radius: 0.2rem;"></canvas>
+            <!-- コントロールUIをcanvasの下に配置 -->
+            <div id="result2Controls" style="min-width: 220px;">
+                <div style="display: flex; flex-wrap: wrap; margin-bottom: 0.5rem; gap: 0.5rem 0; ">
+                    <label style="flex: 1 1 24%; min-width: 130px; max-width: 25%;"><input type="checkbox" id="auto-r2"
+                            checked>自動保存</label>
+                    <label style="flex: 1 1 24%; min-width: 130px; max-width: 25%;"><input id="grid3ShowHeat"
+                            type="checkbox" checked>ヒートマップ</label>
+                    <label style="flex: 1 1 24%; min-width: 130px; max-width: 25%;"><input id="grid3Show"
+                            type="checkbox" checked>グリッド線</label>
+                    <label style="flex: 1 1 24%; min-width: 130px; max-width: 25%;"><input id="vecShow" type="checkbox"
+                            checked>ベクトル</label>
+                    <label style="flex: 1 1 24%; min-width: 130px; max-width: 25%;"><input
+                            id="showTimeAndCoordsChkResult2" type="checkbox" checked>時間・座標帯</label>
+                    <label style="flex: 1 1 24%; min-width: 130px; max-width: 25%;">
+                        <input id="showMixCam" type="checkbox" checked>Webcam
+                    </label>
+                    <label style="flex: 1 1 24%; min-width: 130px; max-width: 25%;"><input id="showResult1"
+                            type="checkbox">Dot</label>
+                    <label style="flex: 1 1 24%; min-width: 130px; max-width: 25%;"><input id="grid3ShowPercent"
+                            type="checkbox">密度（％）</label>
+                </div>
+                <div class="hint">Webcam詳細設定👇 / 0秒を設定すると表示されなくなる⚠️</div>
+                <label style="display: flex; align-items: start; margin-bottom: 1rem; margin-top: 0.5rem;">
+                    <input id="mixCamIntervalSec" type="number" min="0" max="300" step="1" value="30"
+                        style="width: 40px; margin-right: 0.2rem;">秒ごとに
+                    <input id="fadeDuration" type="number" min="0" max="5" step="1" value="3"
+                        style="width: 30px; margin-left: 0.4rem; margin-right: 0.2rem;">秒間フェードで
+                    <input id="mixCamOnSec" type="number" min="0" max="60" step="1" value="10"
+                        style="width: 40px; margin-left: 0.4rem; margin-right: 0.2rem;">秒間表示
+                </label>
+                <div style="display: flex; align-items: start; margin-bottom: 1rem;">
+                    <label>グリッド: <strong id="grid3SizeLabel"></strong> px</label>
+                    <input style="margin-right: 0.5rem;" id="grid3Size" type="range" min="8" max="256" step="1"
+                        value="24" style="width: 140px;" />
+                </div>
+                <div style="display: flex; align-items: start; margin-bottom: 1rem;">
+                    <label style="margin-right: 0.5rem;">色</label>
+                    <input id="vecColor" type="color" value="#ffffff" style="margin-right: 1rem;" />
+                    <label style="margin-right: 0.5rem;">不透明度</label>
+                    <input id="vecAlpha" type="range" min="0.05" max="1" step="0.05" value="0.95"
+                        style="width: 160px; margin-right: 1rem;" />
+                </div>
+                <div style="display: flex; align-items: start; margin-bottom: 1rem;">
+                    <label>ベクトルサイズ: <strong id="vecScaleLabel"></strong></label>
+                    <input style="margin-right: 0.5rem;" id="vecScale" type="range" min="1" max="30" step="1" value="10"
+                        style="width: 140px;" />
+                    <label style="margin-right: 0.5rem;">線幅</label>
+                    <input id="vecLine" type="number" min="0.5" step="0.5" value="1.5"
+                        style="width: 50px; margin-right: 1rem;" />
+                </div>
+                <div style="display: flex; align-items: start; margin-bottom: 1rem;">
+                    <label>ベクトル滑らかさ: <strong id="smoothIters"></strong></label>
+                    <input style="margin-right: 0.5rem;" id="vecSmooth" type="range" min="1" max="5" step="0.1"
+                        value="3.0" style="width: 140px;" />
+                </div>
+                <div style="display: flex; align-items: start; margin-bottom: 1rem;">
+                    <label>吸い込み強度: <strong id="vecGammaLabel"></strong></label>
+                    <input style="margin-right: 0.5rem;" id="vecGamma" type="range" min="1" max="10" step="0.1"
+                        value="1.2" style="width: 140px;" />
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card lock-target">
+        <h2>庭生成情報評価</h2>
+        <div class="hint">[危険-優]で生成状況を判定します</div>
+        <canvas id="garden-announce-grid-visual"></canvas>
+        <div id="garden-announce-meta" style="font-size:0.85rem; color:#555; margin-top:.4rem;">
+        </div>
+    </section>
+
+    <section class="card lock-target">
+        <h2>気象予報アナウンス</h2>
+        <div class="hint">apiを使用し、文章を生成→朗読</div>
+        <div id="garden-audio-device-selector">
+            <div class="row" style="margin-bottom: 0.5rem;">
+                <label for="garden-audio-sink-select">出力先デバイス
+                    <select id="garden-audio-sink-select" style="margin-right: 0.5rem; max-width: 18em;">
+                        <option value=""></option>
+                    </select>
+                    <button id="garden-refresh-device" type="button">再取得</button>
+                    <button id="garden-pick-device" type="button">決定</button>
+                </label>
+            </div>
+        </div>
+
+        <div class="row" style="margin-bottom: 0.5rem;">
+            <label for="garden-tts-voice">TTS Voice</label>
+            <select id="garden-tts-voice">
+                <option value="alloy">voice: alloy</option>
+                <option value="sage">voice: sage</option>
+            </select>
+
+            <label for="garden-tts-format">フォーマット</label>
+            <select id="garden-tts-format">
+                <option value="wav">wav</option>
+                <option value="mp3">mp3</option>
+                <option value="opus">opus(ogg)</option>
+            </select>
+
+            <button type="button" onclick="announceFromCurrentGrid()">今すぐアナウンス</button>
+        </div>
+        <!-- アナウンス文の出力欄（JSは存在すれば文字を入れる） -->
+        <div id="garden-announce-output" style="margin-top:14px;"></div>
+        <div id="garden-announce-usage-info" style="margin:6px 0 14px 0; color:#456;"></div>
+    </section>
+
+    <section class="card lock-target">
+        <h2>詩のコラージュ</h2>
+        <div class="hint">文節数を指定し、各文節ごとに音声データを複数登録できます。各文節からランダムに音声を選んで一文を生成</div>
+        <div class="row">
+            出力先デバイス:<b>⚠️必ずCollagePoetry(3-4)をデフォルトの音声デバイスに設定⚠️</b></div>
+        <div class="row">
+            <label>文節数
+                <input id="bunsetsu-count" type="number" min="1" max="10" value="5"
+                    style="width: 3rem; margin-left: 0.5rem; margin-right: 0.5rem;">
+            </label>
+            <button id="set-bunsetsu-btn">文節数を設定</button>
+            <button id="reload-all-audio-btn">全音声をリロード</button>
+        </div>
+        <div class="row">
+            <label>文節間<input id="collage-gap-seconds" type="number" min="0" step="1" value="1"
+                    style="width: 3rem; margin-left: 0.5rem; margin-right: 0.5rem;">秒</label>
+            <label>文章間<input id="collage-auto-interval-seconds" type="number" value="10" min="1" step="1"
+                    style="width: 3rem; margin-left: 0.5rem; margin-right: 0.5rem;">秒</label>
+            </label>
+        </div>
+        <div id="collage-judge-debug"
+            style="font-size:1rem; padding:0.2rem 0.5rem; background:#0003; color:#fff; border-radius:4px; margin-bottom:0.5rem;">
+            判定:（未受信）
+        </div>
+        <div id="voices-debug" style="margin-top:8px; padding:8px; border-radius:4px;
+            font-size:1rem;">
+            音声ファイルロード状況: 未チェック
+        </div>
+        <div id="collage-result" style="margin-top: 10px; font-size: 1.1em; color: #374151;"></div>
+        <audio id="collage-audio" controls style="display:none; margin-top:8px;"></audio>
+    </section>
+
+    <script src="js/mixwebcam.js" defer></script>
+    <script src="js/judge.js" defer></script>
+    <script src="js/colordetection.js"></script>
+    <script src="js/weatherinformation.js"></script>
+    <script src="js/announce.js"></script>
+    <script src="js/collagepoetry.js"></script>
+    <script src="js/canvas-sender.js"></script>
+    <script src="js/imgautosave.js"></script>
+    <script src="js/fpsdebug.js"></script>
+    <script src="js/editlock.js"></script>
+
+</body>
+
+</html>
